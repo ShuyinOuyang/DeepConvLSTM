@@ -209,6 +209,7 @@ def exp2(datas):
 def main():
 	datas = create()
 	# print(len(datas))
+	exp4(datas)
 	exp2(datas)
 
 
