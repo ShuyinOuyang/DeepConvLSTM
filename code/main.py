@@ -13,6 +13,8 @@ def parse_args():
 						help='train the model')
 	parser.add_argument('--test', action='store_true',
 						help='test the model')
+	parser.add_argument('--predict', action='store_true',
+						help='predict')
 	# parser.add_argument('--id', type=int, default=0,
 	# 					help='program id')
 	parser.add_argument('--id', default='0',
@@ -23,7 +25,7 @@ def parse_args():
 	train_settings = parser.add_argument_group('train settings')
 	train_settings.add_argument('--optim', default='adam',
 								help='optimizer type')
-	train_settings.add_argument('--algo', 
+	train_settings.add_argument('--algo',
 								choices=['rnn', 'cnn', 'lstm'],
 								default='rnn',
                                 help='choose the algorithm to use')
@@ -52,7 +54,7 @@ def parse_args():
 
 	# commons.collections
 	path_settings = parser.add_argument_group('path settings')
-	path_settings.add_argument('--data_path', 
+	path_settings.add_argument('--data_path',
 							   default='dataset/Data/exp4/commons.collections',
 							   help='train data')
 	path_settings.add_argument('--model_dir', default='models',
@@ -87,8 +89,8 @@ def train(args):
 		all_logits = []
 		all_labels = []
 		for bid, batch in enumerate(data.gen_mini_batches(data_name='test')):
-			feed_dict = {model.data: batch['data'], 
-						 model.label: batch['label'], 
+			feed_dict = {model.data: batch['data'],
+						 model.label: batch['label'],
 						 model.seq_len: batch['length']}
 			loss, logits = model.sess.run([model.loss, model.logits], feed_dict)
 
@@ -112,8 +114,8 @@ def train(args):
 		all_logits = []
 		all_labels = []
 		for bid, batch in enumerate(data.gen_mini_batches(data_name='train')):
-			feed_dict = {model.data: batch['data'], 
-						 model.label: batch['label'], 
+			feed_dict = {model.data: batch['data'],
+						 model.label: batch['label'],
 						 model.seq_len: batch['length']}
 			_, loss, logits = model.sess.run([model.train_op, model.loss, model.logits], feed_dict)
 			step += 1
@@ -174,8 +176,7 @@ def test(args):
 		precision, recall = metric(all_logits, all_labels)
 		print('loss:', losses / step, 'precision:', precision, 'recall:', recall, 'F-measure:',
 			  2 / (1 / precision + 1 / recall))
-		print(res)
-		print(sum(res))
+
 
 
 def predict(args):
@@ -185,35 +186,40 @@ def predict(args):
 	print('Loading model ...')
 	model.load(args.model_id)
 	print('Start testing ...')
+	# take other test data as example to predict
 	data_names = ['test']
+	res = []
 	for data_name in data_names:
 		print('Dataset:', data_name)
-		step = 0
-		losses = 0
-		all_logits = []
-		all_labels = []
 
 		for bid, batch in enumerate(data.gen_mini_batches(data_name=data_name, shuffle=False)):
 			feed_dict = {model.data: batch['data'],
 						 model.label: batch['label'],
 						 model.seq_len: batch['length']}
-			loss, logits = model.sess.run([model.loss, model.logits], feed_dict)
-
-			all_logits.extend(np.argmax(logits, 1))
-			all_labels.extend(np.squeeze(batch['label']))
-
-			step += 1
-			losses += loss
-		precision, recall = metric(all_logits, all_labels)
-		print('loss:', losses/step, 'precision:',  precision, 'recall:', recall, 'F-measure:', 2/(1/precision+1/recall))
+			_, logits = model.sess.run([model.loss, model.logits], feed_dict)
+			tmp_session = tf.Session()
+			predict_res = tmp_session.run(tf.nn.softmax(logits))
+			batch_res = []
+			for predict in predict_res:
+				if predict[0] > 0.5:
+					batch_res.append(0)
+				else:
+					batch_res.append(1)
+			res += batch_res
+	count = 0
+	with open(os.path.join(args.data_path, 'test.data')) as f:
+		for line in f.readlines():
+			print('sentence: %s, predict result: %s' % (line, res[count]))
+			count += 1
 
 def run():
 	args = parse_args()
-
 	if args.train:
 		train(args)
 	if args.test:
 		test(args)
+	if args.predict:
+		predict(args)
 
 if __name__ == '__main__':
 	run()
